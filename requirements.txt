@@ -1,0 +1,15 @@
+Django>=5.2,<6
+djangorestframework
+django-filter
+django-cors-headers
+celery
+redis
+mysqlclient
+firebase-admin
+requests
+google-auth
+PyJWT
+wakeonlan
+yt-dlp
+faster-whisper
+numpy

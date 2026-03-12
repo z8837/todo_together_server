@@ -1,0 +1,68 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+.Python
+.python-version
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+django/venv/
+
+# Tool caches and test artifacts
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Editor / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+django/.env
+django/.env.*
+!django/.env.example
+django/firebase_service_account.json
+django/service-account*.json
+django/*.pem
+django/*.p12
+django/*.key
+django/*.crt
+
+# Django local runtime files
+django/db.sqlite3
+django/*.sqlite3
+django/staticfiles/
+django/media/
+django/celerybeat-schedule
+django/celerybeat.pid
+django/*.pid
+django/*.sock
+django/*.log
+
+# Generated media / analysis outputs
+django/*.mp4
+django/*.wav
+django/mysite/django/youtube_meta/
+
+# Local deployment / server operation helpers
+django/open_*_setting.sh
+django/restart_*.sh
+django/reload_gunicorn.sh
+django/makemigrations.sh
+django/migrate_todo_together.sh
+django/udo journalctl -u gunicorn -f

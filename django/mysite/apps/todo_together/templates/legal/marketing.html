@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Todo Together - 함께 쓰는 일정·체크리스트</title>
+
+  <!-- ✅ 간단한 설명(메타 설명) -->
+  <meta name="description" content="팀/커플/가족과 일정·체크리스트를 공유하고, 마감 전에 알림 받고 캘린더로 확인하세요" />
+  <meta name="robots" content="index,follow" />
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="Todo Together" />
+  <meta property="og:description" content="팀/커플/가족과 일정·체크리스트를 공유하고, 마감 전에 알림 받고 캘린더로 확인하세요" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://toto.example.com/" />
+  <meta property="og:image" content="https://toto.example.com/static/marketing/android_graphic.png" />
+
+  <style>
+    :root{
+      --bg:#ffffff;
+      --text:#0b0b0b;
+      --muted:#5b5b5b;
+      --border:#ececec;
+      --card:#ffffff;
+      --soft:#f7f8fb;
+      --primary:#2563eb;
+      --primary2:#1e40af;
+      --shadow: 0 18px 55px rgba(0,0,0,.08);
+      --radius: 18px;
+      --max: 980px;
+    }
+    *{ box-sizing:border-box; }
+    body{
+      margin:0;
+      background:var(--bg);
+      color:var(--text);
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR","Apple SD Gothic Neo","Malgun Gothic",Arial,sans-serif;
+      line-height:1.65;
+    }
+    a{ color:inherit; text-decoration:none; }
+    a:hover{ text-decoration:underline; }
+    .wrap{ max-width: var(--max); margin:0 auto; padding: 22px 18px 70px; }
+
+    /* Top bar */
+    .topbar{
+      display:flex; align-items:center; justify-content:space-between;
+      gap:12px; padding: 6px 0 14px;
+    }
+    .brand{
+      display:flex; align-items:center; gap:10px;
+      font-weight:900; letter-spacing:-.3px;
+    }
+    .appIcon{
+      width:38px; height:38px;
+      border-radius: 12px;
+      border:1px solid var(--border);
+      background:#fff;
+      overflow:hidden;
+      box-shadow: 0 10px 26px rgba(0,0,0,.08);
+      flex: 0 0 auto;
+    }
+    .appIcon img{ width:100%; height:100%; object-fit:cover; display:block; }
+    .nav{
+      display:flex; gap:12px; flex-wrap:wrap;
+      font-size:14px; color:var(--muted);
+      justify-content:flex-end;
+    }
+    .nav a{ color:var(--muted); }
+    .nav a:hover{ color:var(--text); text-decoration:none; }
+
+    /* Hero */
+    .hero{
+      border:1px solid var(--border);
+      border-radius: var(--radius);
+      background:#fff;
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+    .heroMedia{
+      padding: 14px;
+      background: radial-gradient(1200px 420px at 18% 0%, #eef5ff 0%, #ffffff 58%);
+      border-bottom:1px solid var(--border);
+    }
+    .heroImage{
+      width:100%;
+      height:auto;
+      display:block;
+      border-radius: 14px;
+      border: 1px solid #f0f0f0;
+      background:#fff;
+      box-shadow: 0 16px 44px rgba(0,0,0,.11);
+    }
+    .heroBody{
+      padding: 22px 20px 18px;
+    }
+    .kicker{
+      display:inline-flex; align-items:center; gap:8px;
+      font-size: 13px; color: var(--muted);
+      padding: 7px 10px;
+      border-radius: 999px;
+      background: #f7f7f7;
+      border: 1px solid var(--border);
+    }
+    h1{
+      margin: 12px 0 8px;
+      font-size: 36px;
+      line-height: 1.18;
+      letter-spacing: -1px;
+    }
+    @media (max-width: 520px){
+      h1{ font-size: 30px; }
+    }
+    .lead{
+      margin: 0 0 14px;
+      color: var(--muted);
+      font-size: 15px;
+    }
+    .ctaRow{
+      display:flex; gap:10px; flex-wrap:wrap;
+      margin-top: 12px;
+    }
+    .btn{
+      display:inline-flex; align-items:center; justify-content:center;
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background:#fff;
+      font-weight: 900;
+      cursor:pointer;
+      min-height: 44px;
+      font-size: 14px;
+    }
+    .btnPrimary{
+      background: var(--primary);
+      border-color: var(--primary);
+      color:#fff;
+    }
+    .btnPrimary:hover{ background: var(--primary2); }
+
+    .fine{
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 12.5px;
+    }
+
+    /* Sections */
+    .section{ margin-top: 22px; }
+    .secTitle{
+      margin: 0 0 10px;
+      font-size: 20px;
+      letter-spacing:-.4px;
+    }
+    .box{
+      border:1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      background: var(--soft);
+    }
+    .box p{ margin:0; color:var(--muted); font-size:14px; }
+    .grid2{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:12px;
+    }
+    @media (max-width: 900px){
+      .grid2{ grid-template-columns: 1fr; }
+    }
+    .grid3{
+      display:grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap:12px;
+    }
+    @media (max-width: 900px){
+      .grid3{ grid-template-columns: 1fr; }
+    }
+    .card{
+      border:1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      background: var(--card);
+    }
+    .card h3{
+      margin:0 0 6px;
+      font-size: 16px;
+      letter-spacing:-.2px;
+    }
+    .card p{
+      margin:0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .list{
+      margin:0;
+      padding-left: 18px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.8;
+    }
+
+    footer{
+      margin-top: 34px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 13px;
+      display:flex; flex-wrap:wrap;
+      gap:10px;
+      align-items:center;
+      justify-content:space-between;
+    }
+    .links{ display:flex; gap:12px; flex-wrap:wrap; }
+    .links a{ color: var(--muted); }
+    .links a:hover{ color: var(--text); text-decoration:none; }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <div class="brand">
+        <span class="appIcon" aria-hidden="true">
+          <img src="/static/marketing/icon.png" alt="">
+        </span>
+        <div>Todo Together</div>
+      </div>
+      <nav class="nav" aria-label="상단 메뉴">
+        <a href="#features">핵심 기능</a>
+        <a href="#forwho">추천 대상</a>
+        <a href="/toto/support/">지원</a>
+        <a href="/toto/privacy-policy/">개인정보처리방침</a>
+      </nav>
+    </div>
+
+    <section class="hero">
+      <!-- ✅ 상단 이미지 -->
+      <div class="heroMedia" aria-label="앱 이미지">
+        <img
+          class="heroImage"
+          src="/static/marketing/android_graphic.png"
+          alt="Todo Together 앱 화면"
+          loading="lazy"
+        />
+      </div>
+
+      <!-- ✅ 내용 -->
+      <div class="heroBody">
+        <span class="kicker">📌 일정 체크리스트 공유</span>
+
+        <h1>함께 쓰는 일정·체크리스트<br/>Todo Together</h1>
+
+        <!-- ✅ 간단한 설명 -->
+        <p class="lead">
+          팀/커플/가족과 일정·체크리스트를 공유하고, 마감 전에 알림 받고 캘린더로 확인하세요
+        </p>
+
+        <div class="ctaRow">
+          <a class="btn btnPrimary" href="https://apps.apple.com/us/app/todo-together/id6758488171" rel="noopener">App Store에서 보기</a>
+          <a class="btn" href="/toto/support/">문의/지원</a>
+          <a class="btn" href="/toto/account-deletion/">계정 삭제 요청</a>
+        </div>
+
+        <div class="fine">
+          * 알림은 기기 설정에서 알림 권한을 허용해야 동작할 수 있어요.
+        </div>
+      </div>
+    </section>
+
+    <!-- ✅ 자세한 설명 -->
+    <section class="section" id="about">
+      <h2 class="secTitle">자세한 설명</h2>
+      <div class="box">
+        <p>
+          Todo Together는 프로젝트 단위로 사람을 초대해 일정과 체크리스트를 함께 만들고 공유하는 앱입니다.<br/>
+          팀, 커플, 가족처럼 “같이 일정을 공유하는 사람들”과 해야 할 일을 한 곳에 모아두고,
+          놓치기 쉬운 일정은 알림으로 미리 확인할 수 있어요.
+        </p>
+      </div>
+    </section>
+
+    <!-- ✅ 핵심 기능 -->
+    <section class="section" id="features">
+      <h2 class="secTitle">핵심 기능</h2>
+
+      <div class="grid3">
+        <div class="card">
+          <h3>프로젝트 초대 & 공유</h3>
+          <p>프로젝트에 멤버를 초대하고, 같은 공간에서 일정과 체크리스트를 함께 관리할 수 있어요.</p>
+        </div>
+        <div class="card">
+          <h3>일정 관리</h3>
+          <p>일정의 시작 시간/중요 시점에 맞춰 계획을 정리하고 공유합니다.</p>
+        </div>
+        <div class="card">
+          <h3>체크리스트(할 일) 관리</h3>
+          <p>마감 시간, 완료 여부를 관리하며 진행 상황을 한눈에 확인할 수 있어요.</p>
+        </div>
+      </div>
+
+      <div class="grid2" style="margin-top:12px;">
+        <div class="card">
+          <h3>마감/시작 전 푸시 알림</h3>
+          <p>일정 시작 전, 체크리스트 마감 전에 알림을 받아 중요한 일을 놓치지 않게 도와줍니다.</p>
+        </div>
+        <div class="card">
+          <h3>통합 캘린더 보기</h3>
+          <p>내가 속한 여러 프로젝트의 일정을 캘린더에서 한 번에 확인할 수 있어 일정 겹침도 쉽게 관리돼요.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ✅ 추천 대상 -->
+    <section class="section" id="forwho">
+      <h2 class="secTitle">이런 분들에게 추천해요</h2>
+      <div class="card">
+        <ul class="list">
+          <li>팀 프로젝트/스터디/동호회에서 일정 공유가 필요할 때</li>
+          <li>커플/부부가 함께 준비하는 일정(여행, 결혼, 집들이 등)을 관리할 때</li>
+          <li>가족 일정·할 일을 공유하고, 마감 전에 알림으로 챙기고 싶을 때</li>
+        </ul>
+        <p style="margin:12px 0 0; color:var(--muted); font-size:14px;">
+          필요한 것만 깔끔하게, 함께 쓰는 일정과 할 일을 더 쉽게.<br/>
+          Todo Together로 프로젝트를 초대하고 공유해보세요.
+        </p>
+      </div>
+    </section>
+
+    <footer>
+      <div>© <span id="y"></span> Todo Together</div>
+      <div class="links">
+        <a href="/toto/privacy-policy/">개인정보처리방침</a>
+        <a href="/toto/support/">지원</a>
+        <a href="/toto/account-deletion/">계정 삭제</a>
+        <a href="mailto:z8837@naver.com">이메일 문의</a>
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    document.getElementById("y").textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>

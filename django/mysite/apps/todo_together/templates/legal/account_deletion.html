@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex,nofollow" />
+  <title>Todo Together 계정 삭제 요청</title>
+  <style>
+    :root { --text:#111; --muted:#555; --border:#e6e6e6; --bg:#fff; --primary:#0b57d0; }
+    body { margin:0; background:var(--bg); color:var(--text);
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR","Apple SD Gothic Neo","Malgun Gothic",Arial,sans-serif;
+      line-height:1.65;
+    }
+    .container { max-width:720px; margin:0 auto; padding:28px 18px 60px; }
+    header { padding-bottom:14px; border-bottom:1px solid var(--border); margin-bottom:18px; }
+    h1 { font-size:24px; margin:0 0 6px; }
+    .subtitle { margin:0; color:var(--muted); font-size:14px; }
+    .card { border:1px solid var(--border); border-radius:12px; padding:16px; background:#fff; }
+    label { display:block; font-weight:600; margin:14px 0 6px; }
+    input, select, textarea {
+      width:100%; box-sizing:border-box; border:1px solid var(--border); border-radius:10px;
+      padding:10px 12px; font-size:14px; background:#fff;
+    }
+    textarea { min-height: 88px; resize: vertical; }
+    .hint { font-size:13px; color:var(--muted); margin:6px 0 0; }
+    .btn {
+      margin-top:14px;
+      display:inline-flex; align-items:center; justify-content:center;
+      padding:12px 14px; border-radius:12px; border:1px solid var(--primary);
+      background:var(--primary); color:#fff; font-weight:700; cursor:pointer;
+      width:100%;
+    }
+    .notice { margin-top:14px; padding:12px; border-radius:10px; background:#fafafa; border:1px solid var(--border); }
+    .small { font-size:13px; color:var(--muted); }
+  </style>
+</head>
+
+<body>
+  <main class="container">
+    <header>
+      <h1>계정 삭제 요청</h1>
+      <p class="subtitle">이메일 확인 링크를 통해 본인 확인 후 삭제가 진행됩니다.</p>
+    </header>
+
+    {% if success %}
+      <div class="card">
+        <h2 style="margin:0 0 8px; font-size:18px;">요청이 접수되었습니다</h2>
+        <p style="margin:0 0 10px;">
+          입력하신 이메일로 <strong>삭제 확인 링크</strong>를 발송했습니다.<br/>
+          메일의 링크를 눌러야 삭제가 진행됩니다.
+        </p>
+        <p class="small" style="margin:0;">
+          메일이 보이지 않으면 스팸함을 확인해 주세요.
+        </p>
+      </div>
+    {% else %}
+      <form class="card" method="post" action="{% url 'account_deletion_submit' %}">
+        {% csrf_token %}
+
+        <label for="email">이메일</label>
+        <input id="email" name="email" type="email" placeholder="you@example.com" required />
+
+        <label for="provider">로그인 제공자</label>
+        <select id="provider" name="provider" required>
+          <option value="" selected disabled>선택해 주세요</option>
+          <option value="google">구글</option>
+          <option value="naver">네이버</option>
+          <option value="kakao">카카오</option>
+        </select>
+        <p class="hint">동일한 이메일이라도 제공자에 따라 계정이 다를 수 있습니다.</p>
+
+        <label for="reason">삭제 사유(선택)</label>
+        <textarea id="reason" name="reason" placeholder="선택 입력"></textarea>
+
+        <div class="notice">
+          <div class="small">
+            • 링크 확인 후 계정 식별정보는 삭제/가명처리됩니다.<br/>
+            • 협업 프로젝트 특성상 프로젝트/할 일/메모 등 콘텐츠는 다른 사용자에게 영향을 줄 수 있어 유지될 수 있으며 작성자는 “탈퇴한 사용자”로 표시됩니다.<br/>
+            • 확인 링크는 일정 시간 후 만료됩니다.
+          </div>
+        </div>
+
+        <button class="btn" type="submit">삭제 요청 메일 보내기</button>
+        <p class="small" style="margin:10px 0 0;">
+          문의: <a href="mailto:z8837@naver.com">z8837@naver.com</a>
+        </p>
+      </form>
+    {% endif %}
+  </main>
+</body>
+</html>

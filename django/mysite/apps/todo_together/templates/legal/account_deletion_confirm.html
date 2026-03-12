@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex,nofollow" />
+  <title>계정 삭제 확인</title>
+  <style>
+    body { font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR","Malgun Gothic",Arial,sans-serif; padding:24px; }
+    .card { max-width:640px; margin:0 auto; border:1px solid #e6e6e6; border-radius:12px; padding:16px; }
+    h1 { margin:0 0 10px; font-size:20px; }
+    p { margin:0 0 14px; color:#333; line-height:1.6; }
+    .btn {
+      display:inline-flex; align-items:center; justify-content:center;
+      padding:12px 14px; border-radius:12px; border:1px solid #0b57d0;
+      background:#0b57d0; color:#fff; font-weight:700; cursor:pointer; width:100%;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    {% if state == "done" %}
+      <h1>삭제가 완료되었습니다</h1>
+      <p>계정 삭제 처리가 진행되었습니다. 이제 해당 계정으로 로그인할 수 없습니다.</p>
+
+    {% elif state == "confirm" %}
+      <h1>계정 삭제 확인</h1>
+      <p>정말로 계정을 삭제할까요? (되돌릴 수 없어요)</p>
+
+      <form method="post">
+        {% csrf_token %}
+        <button class="btn" type="submit">삭제 확정</button>
+      </form>
+
+    {% else %}
+      <h1>유효하지 않은 링크입니다</h1>
+      <p>링크가 만료되었거나 이미 처리되었습니다. 다시 삭제 요청을 진행해 주세요.</p>
+    {% endif %}
+  </div>
+</body>
+</html>
