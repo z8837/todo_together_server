@@ -38,4 +38,3 @@ todo_together_server/
 - MySQL
 - Firebase Admin SDK
 - Google OAuth 검증, PyJWT
-- yt-dlp, faster-whisper, ffmpeg 기반 미디어 실험 기능
