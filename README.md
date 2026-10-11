@@ -63,7 +63,27 @@ ORM 기본값과 DB 기본값을 함께 설정하여 배포 중 구버전 서버
 
 색상 필드는 추가 필드이며 기존 필드나 응답 구조를 바꾸지 않습니다.
 기존 앱은 새 필드를 무시하고 기존 색상 표시를 계속 사용합니다.
-앱의 색상 선택/달력 표시는 별도 작업입니다.
+앱은 기본 색과 개인 색을 선택할 수 있으며 일반·반복 일정에 같은 프로젝트 색을 사용합니다.
+
+## 프로젝트별 개인 색
+
+`Project.color`는 공통 기본 색입니다. 개인 색은 별도의 `ProjectUserPreference`에
+`(project, user)` 유일 제약과 `color_override VARCHAR(7) DEFAULT ''`로 저장합니다.
+소유자와 reader/writer/manager 모두 본인 설정을 변경할 수 있습니다.
+다른 사용자 설정은 응답에 노출되지 않으며, 사용자 ID는 인증 정보에서 결정합니다.
+
+- 조회/수정: `GET`, `PATCH`, `PUT /toto/projects/{id}/my-settings/`
+- 입력: `{"color_override": "#1A56FF", "version": 0}`. 색 형식은 기본 색과 동일합니다.
+- 빈 문자열 또는 null은 기본 색 사용으로 복원합니다. 해당 행은 유지하고 개인 버전을 증가시킵니다.
+- `version`은 선택 사항입니다. 조회 시 받은 버전을 보내면 충돌 시 HTTP 409와 최신 `preference`를 반환합니다.
+- 동일한 색의 재저장은 버전을 증가시키지 않습니다.
+- 개인 색 변경은 프로젝트 공통 버전을 바꾸거나 다른 멤버에게 알림을 보내지 않습니다.
+- 프로젝트 목록/상세/sync 응답에 읽기 전용 `my_color`, `display_color`, `preference_version`을 추가합니다.
+  기존 `color`는 계속 공통 색을 의미합니다. 표시 우선순위는 개인 색 → 기본 색 → 프로젝트 ID 기반 자동 색입니다.
+- `/toto/projects/sync/` 요청에 `preferences: [{"project": "프로젝트 UUID", "version": 1}]`를
+  추가하면 응답의 `preferences`에서 본인 설정의 변경분을 받습니다.
+  프로젝트 버전이 같아도 개인 색 변경과 복원이 전달됩니다. 기존 앱의 요청은 그대로 허용합니다.
+- 위젯은 앱 실행 없이 전체 프로젝트 sync를 조회하여 `display_color`와 일정 데이터를 함께 갱신합니다.
 
 적용: `python manage.py migrate todo_together --database=toto_db`
 

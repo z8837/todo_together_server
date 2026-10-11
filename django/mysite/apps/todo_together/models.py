@@ -371,6 +371,22 @@ class ProjectMember(TimeStampedSoftDelete):
 
 
 
+class ProjectUserPreference(models.Model):
+    """Private display preferences, including the owner who has no membership row."""
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="user_preferences")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="project_preferences")
+    color_override = models.CharField(
+        max_length=7, blank=True, default="", db_default="",
+        validators=[RegexValidator(regex=r"\A(?:#[0-9A-F]{6})?\Z", message="Use #RRGGBB or leave the color empty.")],
+    )
+    version = models.PositiveIntegerField(default=1)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["project", "user"], name="uq_project_user_preference")]
+        indexes = [models.Index(fields=["user", "updated_at"], name="project_pref_user_updated")]
+
+
 class ProjectChecklistOrder(TimeStampedSoftDelete):
     project = models.ForeignKey(
         Project, on_delete=models.CASCADE, related_name="checklist_orders"
