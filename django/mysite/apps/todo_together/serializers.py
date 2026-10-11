@@ -3,6 +3,7 @@ from .models import *
 from django.contrib.auth import get_user_model
 from .services import normalize_provider
 import re
+from .project_colors import project_display_color
 
 
 class TOTOTestSerializer(serializers.ModelSerializer):
@@ -188,6 +189,29 @@ class ProjectSerializer(serializers.ModelSerializer):
     # Do not set a serializer default: old PUT/PATCH requests must preserve an
     # existing color when the field is omitted. The model supplies create defaults.
     color = ProjectColorField(required=False, allow_blank=True, allow_null=True, max_length=7)
+    my_color = serializers.SerializerMethodField()
+    display_color = serializers.SerializerMethodField()
+    preference_version = serializers.SerializerMethodField()
+
+    def _preference(self, project):
+        prefetched = getattr(project, "_current_user_preferences", None)
+        if prefetched is not None:
+            return prefetched[0] if prefetched else None
+        request = self.context.get("request")
+        if request and request.user.is_authenticated:
+            return project.user_preferences.filter(user=request.user).first()
+        return None
+
+    def get_my_color(self, project):
+        preference = self._preference(project)
+        return preference.color_override if preference else ""
+
+    def get_display_color(self, project):
+        return project_display_color(project, self.get_my_color(project))
+
+    def get_preference_version(self, project):
+        preference = self._preference(project)
+        return preference.version if preference else 0
 
     class Meta:
         model = Project
@@ -196,6 +220,9 @@ class ProjectSerializer(serializers.ModelSerializer):
             "name",
             "description",
             "color",
+            "my_color",
+            "display_color",
+            "preference_version",
             "version",
             "recent_update_at",
             "owner",
@@ -226,6 +253,20 @@ class ProjectSyncSerializer(serializers.ModelSerializer):
             # 필요하면 여기에 최소한의 추가 필드만 더 넣기
         ]
         read_only_fields = fields
+
+
+class ProjectUserPreferenceSerializer(serializers.ModelSerializer):
+    project = serializers.CharField(source="project_id", read_only=True)
+
+    class Meta:
+        model = ProjectUserPreference
+        fields = ["project", "color_override", "version", "updated_at"]
+        read_only_fields = fields
+
+
+class ProjectUserPreferenceInputSerializer(serializers.Serializer):
+    color_override = ProjectColorField(allow_blank=True, allow_null=True, max_length=7)
+    version = serializers.IntegerField(required=False, min_value=0)
 
 
 class ProjectChecklistOrderSyncSerializer(serializers.ModelSerializer):

@@ -1,7 +1,7 @@
 from django.http import HttpResponse, JsonResponse
 from django.core.serializers.json import DjangoJSONEncoder
 
-from django.db.models import Q, Exists, OuterRef, Subquery, Value, F, Case, When, FloatField
+from django.db.models import Q, Exists, OuterRef, Subquery, Value, F, Case, When, FloatField, Prefetch
 from django.db.models.functions import Coalesce
 from django.db import transaction, router
 import json
@@ -353,8 +353,11 @@ class ProjectViewSet(viewsets.ModelViewSet):
         user = self.request.user
         # owner 이거나 멤버십에 포함된 프로젝트만
         return Project.objects.filter(
-            Q(owner=user) | Q(membership__user=user)
-        ).distinct()
+            Q(owner=user) | Q(membership__user=user, membership__is_deleted=False)
+        ).distinct().prefetch_related(Prefetch(
+            "user_preferences", queryset=ProjectUserPreference.objects.filter(user=user),
+            to_attr="_current_user_preferences",
+        ))
 
     def perform_destroy(self, instance):
         # 소프트 삭제
@@ -592,6 +595,39 @@ class ProjectViewSet(viewsets.ModelViewSet):
         return Response(status=status.HTTP_204_NO_CONTENT)
     
 
+    @action(detail=True, methods=["get", "put", "patch"], url_path="my-settings")
+    def my_settings(self, request, pk=None):
+        project = self.get_object()
+        if not project.has_read(request.user):
+            raise PermissionDenied("프로젝트에 접근할 수 없습니다.")
+
+        if request.method == "GET":
+            preference = ProjectUserPreference.objects.filter(project=project, user=request.user).first()
+            if preference is None:
+                return Response({"project": str(project.id), "color_override": "", "version": 0, "updated_at": None})
+            return Response(ProjectUserPreferenceSerializer(preference).data)
+
+        incoming = ProjectUserPreferenceInputSerializer(data=request.data)
+        incoming.is_valid(raise_exception=True)
+        database = router.db_for_write(ProjectUserPreference)
+        with transaction.atomic(using=database):
+            preference, _ = ProjectUserPreference.objects.get_or_create(
+                project=project, user=request.user, defaults={"version": 0},
+            )
+            preference = ProjectUserPreference.objects.select_for_update().get(pk=preference.pk)
+            client_version = incoming.validated_data.get("version")
+            if client_version is not None and client_version != preference.version:
+                return Response({
+                    "detail": "다른 기기에서 색을 변경했습니다. 새로고침 후 다시 선택해주세요.",
+                    "preference": ProjectUserPreferenceSerializer(preference).data,
+                }, status=status.HTTP_409_CONFLICT)
+            color = incoming.validated_data["color_override"]
+            if color != preference.color_override or preference.version == 0:
+                preference.color_override = color
+                preference.version += 1
+                preference.save(update_fields=["color_override", "version", "updated_at"])
+        return Response(ProjectUserPreferenceSerializer(preference).data)
+
     @action(detail=True, methods=["get", "put"], url_path="checklist-order")
     def checklist_order(self, request, pk=None):
         project = self.get_object()
@@ -695,8 +731,11 @@ class ProjectSyncView(APIView):
         }
 
         qs = Project.all_objects.filter(
-            Q(owner=user) | Q(membership__user=user)
-        ).distinct().order_by("created_at")
+            Q(owner=user) | Q(membership__user=user, membership__is_deleted=False)
+        ).distinct().order_by("created_at").prefetch_related(Prefetch(
+            "user_preferences", queryset=ProjectUserPreference.objects.filter(user=user),
+            to_attr="_current_user_preferences",
+        ))
 
         to_send = []
         deleted_ids = []
@@ -752,13 +791,27 @@ class ProjectSyncView(APIView):
                 orders_to_send.append(o)
 
         data = {
-            "projects": ProjectSerializer(to_send, many=True).data,
+            "projects": ProjectSerializer(to_send, many=True, context={"request": request}).data,
             "deleted": deleted_ids,
 
             # ✅ 추가
             "checklist_orders": ProjectChecklistOrderSyncSerializer(orders_to_send, many=True).data,
             "checklist_orders_deleted": orders_deleted_project_ids,
         }
+        # Private changes have their own versions; do not bump the shared project
+        # version or notify other members when somebody changes their display color.
+        client_preferences = {
+            str(item["project"]): item["version"]
+            for item in request.data.get("preferences", [])
+            if "project" in item and "version" in item
+        }
+        preferences = ProjectUserPreference.objects.filter(
+            user=user, project_id__in=readable_project_ids, project__is_deleted=False,
+        )
+        data["preferences"] = ProjectUserPreferenceSerializer([
+            preference for preference in preferences
+            if preference.version > client_preferences.get(str(preference.project_id), -1)
+        ], many=True).data
         return Response(data, status=status.HTTP_200_OK)
 
 
