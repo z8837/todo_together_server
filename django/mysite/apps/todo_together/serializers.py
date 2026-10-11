@@ -2,6 +2,7 @@ from rest_framework import serializers
 from .models import *
 from django.contrib.auth import get_user_model
 from .services import normalize_provider
+import re
 
 
 class TOTOTestSerializer(serializers.ModelSerializer):
@@ -160,10 +161,33 @@ class ProjectMemberSerializer(serializers.ModelSerializer):
 
 
 # ---------- Project ----------
+class ProjectColorField(serializers.CharField):
+    default_error_messages = {
+        "invalid": "Use a six-digit hex color, such as #1A56FF or 1A56FF.",
+    }
+
+    def to_internal_value(self, data):
+        if not isinstance(data, str):
+            self.fail("invalid")
+        value = super().to_internal_value(data)
+        if not value:
+            return ""
+        if not re.fullmatch(r"#?[0-9a-fA-F]{6}", value):
+            self.fail("invalid")
+        return "#" + value.removeprefix("#").upper()
+
+    def run_validation(self, data=serializers.empty):
+        value = super().run_validation(data)
+        return "" if value is None else value
+
+
 class ProjectSerializer(serializers.ModelSerializer):
     owner = SimpleUserSerializer(read_only=True)
     # 멤버십 read-only로 내려주고, 변경은 별도 액션에서 처리
     membership = ProjectMemberSerializer(many=True, read_only=True)
+    # Do not set a serializer default: old PUT/PATCH requests must preserve an
+    # existing color when the field is omitted. The model supplies create defaults.
+    color = ProjectColorField(required=False, allow_blank=True, allow_null=True, max_length=7)
 
     class Meta:
         model = Project
@@ -171,6 +195,7 @@ class ProjectSerializer(serializers.ModelSerializer):
             "id",
             "name",
             "description",
+            "color",
             "version",
             "recent_update_at",
             "owner",
@@ -193,6 +218,7 @@ class ProjectSyncSerializer(serializers.ModelSerializer):
             "id",
             "name",
             "description",
+            "color",
             "version",
             "recent_update_at",
             "updated_at",

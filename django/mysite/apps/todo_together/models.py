@@ -10,6 +10,7 @@ from datetime import timedelta, datetime, time as dtime
 from django.conf import settings
 from django.db.models import Q
 from django.core.exceptions import ValidationError
+from django.core.validators import RegexValidator
 
 class TOTOTest(models.Model):
 	name = models.CharField(default='', max_length=2048)
@@ -246,6 +247,18 @@ class Project(TimeStampedSoftDelete):
     )
     name = models.CharField(max_length=120)
     description = models.TextField(blank=True)
+    # Empty means unset. A database default also keeps old server writers safe
+    # while the additive migration and the application reload are rolling out.
+    color = models.CharField(
+        max_length=7,
+        blank=True,
+        default="",
+        db_default="",
+        validators=[RegexValidator(
+            regex=r"\A(?:#[0-9A-F]{6})?\Z",
+            message="Use #RRGGBB or leave the project color empty.",
+        )],
+    )
 
     version = models.PositiveIntegerField(default=1)
     recent_update_at = models.DateTimeField(null=True, blank=True)
