@@ -1,3 +1,4 @@
+from .push_localization import normalize_push_locale
 from rest_framework import serializers
 from .models import *
 from django.contrib.auth import get_user_model
@@ -577,6 +578,7 @@ class DeviceSerializer(serializers.ModelSerializer):
             "public_id",   # ✅ 추가
             "platform",
             "fcm_token",
+            "locale",
             "is_active",
             "created_at",
             "last_used_at",
@@ -585,6 +587,11 @@ class DeviceSerializer(serializers.ModelSerializer):
 
 
 class DeviceRegisterSerializer(serializers.Serializer):
+    locale = serializers.CharField(required=False, allow_null=True, allow_blank=True, max_length=100)
+
+    def validate_locale(self, value):
+        return normalize_push_locale(value)
+
     public_id = serializers.UUIDField(required=False, allow_null=True)
     fcm_token = serializers.CharField(max_length=255)
     platform = serializers.ChoiceField(choices=Device.Platform.choices)

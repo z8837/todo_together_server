@@ -246,35 +246,38 @@ logger = logging.getLogger(__name__)
 
 
 @shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=True, max_retries=5)
-def todo_post_create_task(self, todo_id: str, actor_id: int):
+def todo_post_create_task(self, todo_id: str, actor_id: int, event_key=None, event_args=None):
     
     todo = Todo.objects.select_related("project").get(id=todo_id)
     actor = User.objects.get(id=actor_id)
 
     # 알림/푸시
-    send_todo_activity_notifications(todo, actor=actor, event="created")
+    send_todo_activity_notifications(todo, actor=actor, event="created", event_key=event_key, event_args=event_args)
 
     # 리마인더 예약
     schedule_next_reminders_for_todo(todo)
 
 @shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=True, max_retries=5)
-def todo_post_update_task(self, todo_id: str, actor_id: int, event: str, changes: list | None = None):
+def todo_post_update_task(
+    self, todo_id: str, actor_id: int, event: str, changes: list | None = None,
+    event_key=None, event_args=None,
+):
     logger.warning("todo_post_update_task!!")
     todo = Todo.objects.select_related("project").get(id=todo_id)
     actor = User.objects.get(id=actor_id)
 
-    send_todo_activity_notifications(todo, actor=actor, event=event, changes=changes or [])
+    send_todo_activity_notifications(todo, actor=actor, event=event, changes=changes or [], event_key=event_key, event_args=event_args)
     schedule_next_reminders_for_todo(todo)
 
 
 @shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=True, max_retries=5)
-def todo_post_destroy_task(self, todo_id: str, actor_id: int):
+def todo_post_destroy_task(self, todo_id: str, actor_id: int, event_key=None, event_args=None):
     # ✅ 삭제(soft delete)된 todo도 조회되어야 하므로 all_objects 사용
     todo = Todo.all_objects.select_related("project").get(id=todo_id)
     actor = User.objects.get(id=actor_id)
 
     # ✅ 알림/FCM 백그라운드 발송
-    send_todo_activity_notifications(todo, actor=actor, event="destroy")
+    send_todo_activity_notifications(todo, actor=actor, event="destroy", event_key=event_key, event_args=event_args)
 
 
 
@@ -283,7 +286,10 @@ def todo_post_destroy_task(self, todo_id: str, actor_id: int):
 
 
 @shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=True, max_retries=5)
-def push_to_user_task(self, user_id: int, title: str, body: str, data: dict, force_data_only: bool = False):
+def push_to_user_task(
+    self, user_id: int, title: str, body: str, data: dict,
+    force_data_only: bool = False, event_key=None, event_args=None,
+):
     try:
         user = User.objects.get(id=user_id)
     except User.DoesNotExist:
@@ -297,11 +303,15 @@ def push_to_user_task(self, user_id: int, title: str, body: str, data: dict, for
         body=body or "",
         data=data or {},
         force_data_only=force_data_only,
+        event_key=event_key, event_args=event_args,
     )
 
 
 @shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=True, max_retries=5)
-def push_to_users_task(self, user_ids: list[int], title: str, body: str, data: dict, force_data_only: bool = False):
+def push_to_users_task(
+    self, user_ids: list[int], title: str, body: str, data: dict,
+    force_data_only: bool = False, event_key=None, event_args=None,
+):
     if not user_ids:
         return
 
@@ -316,4 +326,5 @@ def push_to_users_task(self, user_ids: list[int], title: str, body: str, data: d
             body=body or "",
             data=data or {},
             force_data_only=force_data_only,
+            event_key=event_key, event_args=event_args,
         )
