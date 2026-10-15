@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
@@ -21,9 +21,10 @@ from .models import (
     Notification, TodoKind, Device, ProjectMember,
     NotificationPreference, UserNote, TodoUserState)
 
+from .push_localization import normalize_push_locale, render_push_message, todo_push_snapshot
 from .tokens import build_access_token, issue_token_pair
 
-from firebase_admin import messaging, exceptions as fb_exceptions
+from firebase_admin import messaging
 from .firebase import get_firebase_app
 from django.db.models import Q  
 
@@ -560,143 +561,94 @@ def send_push_to_user(
     data: dict | None = None,
     *,
     force_data_only: bool = False,
+    event_key=None,
+    event_args=None,
 ):
-    """
-    유저의 활성 디바이스에 FCM 발송.
-    - notification_pref 에 따라 data-only vs notification+data 분기
-    - force_data_only=True 이면 무조건 data-only로 전송
-    - FCM 에러는 위로 안 올리고 로그만 남김
-
-    ✅ 개선점
-    - 토큰을 한번에 모아서 멀티캐스트 형태로 전송
-    - devices.exists() 같은 추가 쿼리 없이 1번만 조회
-    - 폐기 토큰 처리(registration-token-not-registered)
-    """
-
-    # 1) FCM 초기화
+    """Render using current device locales, then send batches of at most 500."""
     try:
         get_firebase_app()
     except Exception:
-        logger.exception("FCM 초기화 실패 (user=%s)", getattr(user, "id", None))
+        logger.exception("FCM initialization failed (user=%s)", user.id)
         return
-
-    # 2) 활성 디바이스 + 토큰 로드 (쿼리 1번)
-    devices = list(user.devices.filter(is_active=True).only("id", "fcm_token"))
-    if not devices:
-        return
-
-    # ⚠️ devices와 tokens의 인덱스를 맞추기 위해 (토큰 없는 디바이스는 제외한) paired 리스트를 만든다
-    paired = [(d, d.fcm_token) for d in devices if getattr(d, "fcm_token", None)]
-    if not paired:
-        return
-
-    devices2 = [p[0] for p in paired]
-    tokens = [p[1] for p in paired]
-
-    # 3) payload 문자열 강제
     data = data or {}
     msg_type = data.get("type")
-
-    payload: dict[str, str] = {str(k): ("" if v is None else str(v)) for k, v in data.items()}
-
-    # 4) 알림 설정(pref)에 따라 data-only 여부 결정
     pref = getattr(user, "notification_pref", None)
     data_only = bool(force_data_only)
-
     if not force_data_only and pref and msg_type:
-        if msg_type == "project_invite" and not getattr(pref, "project_invite_enabled", True):
+        preference = {
+            "project_invite": "project_invite_enabled",
+            "project_updated": "project_activity_enabled",
+            "project_destroy": "project_activity_enabled",
+            "todo_created": "todo_activity_enabled",
+            "todo_updated": "todo_activity_enabled",
+            "todo_destroy": "todo_activity_enabled",
+            "todo_reminder": "todo_reminder_enabled",
+        }.get(msg_type)
+        if preference and not getattr(pref, preference, True):
+            if msg_type == "todo_reminder":
+                return
             data_only = True
-        elif msg_type == "project_updated" and not getattr(pref, "project_activity_enabled", True):
-            data_only = True
-        elif msg_type in ("todo_created", "todo_updated") and not getattr(pref, "todo_activity_enabled", True):
-            data_only = True
-        elif msg_type == "todo_reminder" and not getattr(pref, "todo_reminder_enabled", True):
-            return  # 리마인더 OFF면 아예 안 보냄
-
-    android_cfg = messaging.AndroidConfig(priority="high")
-
-    # 5) 메시지 구성
-    if data_only:
-        message = messaging.MulticastMessage(
-            data=payload,
-            tokens=tokens,
-        )
-    elif msg_type == "todo_reminder":
-        message = messaging.MulticastMessage(
-            notification=messaging.Notification(title=title, body=body),
-            data=payload,
-            tokens=tokens,
-            android=android_cfg,
-            apns=build_ios_alert_apns(title, body),
-        )
-    else:
-        message = messaging.MulticastMessage(
-            notification=messaging.Notification(title=title, body=body),
-            data=payload,
-            tokens=tokens,
-        )
-
-    # 6) 전송
-    try:
-        # ✅ send_multicast 가 없는 환경을 대비해 send_each_for_multicast 사용
-        if hasattr(messaging, "send_each_for_multicast"):
-            resp = messaging.send_each_for_multicast(message)
+    groups = {}
+    for device in user.devices.filter(is_active=True).only("id", "fcm_token", "locale"):
+        if device.fcm_token:
+            groups.setdefault(normalize_push_locale(device.locale), []).append(device)
+    for locale, devices in groups.items():
+        if event_key:
+            localized_title, localized_body = render_push_message(
+                event_key, event_args or {}, locale
+            )
         else:
-            # fallback: 아주 옛 버전이면 단건 전송으로 degrade
-            logger.warning("firebase_admin.messaging.send_each_for_multicast 미지원 → 단건 전송 fallback")
-            class _Resp:
-                responses = []
-            resp = _Resp()
-            for t in tokens:
-                try:
-                    r = messaging.send(
-                        messaging.Message(
-                            notification=None if data_only else messaging.Notification(title=title, body=body),
-                            data=payload,
-                            token=t,
-                            android=android_cfg if (not data_only and msg_type == "todo_reminder") else None,
-                            apns=build_ios_alert_apns(title, body) if (not data_only and msg_type == "todo_reminder") else None,
-                        )
+            localized_title, localized_body = title, body
+        payload = {str(k): "" if v is None else str(v) for k, v in data.items()}
+        # Preserve routing keys; refresh display text only when it is present.
+        for key in ("title", "notificationTitle"):
+            if key in payload:
+                payload[key] = localized_title
+        for key in ("body", "message", "notificationBody"):
+            if key in payload:
+                payload[key] = localized_body
+        for offset in range(0, len(devices), 500):
+            batch = devices[offset:offset + 500]
+            options = {"data": payload}
+            if not data_only:
+                options["notification"] = messaging.Notification(title=localized_title, body=localized_body)
+                if msg_type == "todo_reminder":
+                    options["android"] = messaging.AndroidConfig(priority="high")
+                    options["apns"] = build_ios_alert_apns(localized_title, localized_body)
+            try:
+                if hasattr(messaging, "send_each_for_multicast"):
+                    message = messaging.MulticastMessage(
+                        tokens=[device.fcm_token for device in batch], **options
                     )
-                    resp.responses.append(type("R", (), {"success": True, "exception": None})())
-                except Exception as e:
-                    resp.responses.append(type("R", (), {"success": False, "exception": e})())
-    except fb_exceptions.FirebaseError as e:
-        code = getattr(e, "code", "")
-        logger.warning(
-            "FCM 전송 실패 (user=%s, code=%s, msg=%s)",
-            getattr(user, "id", None),
-            code,
-            e,
-        )
-        return
-    except Exception:
-        logger.exception("FCM 전송 중 알 수 없는 에러 (user=%s)", getattr(user, "id", None))
-        return
-
-    # 7) 실패 토큰 처리
-    for i, r in enumerate(resp.responses):
-        if getattr(r, "success", False):
-            continue
-
-        exc = getattr(r, "exception", None)
-        code = getattr(exc, "code", "") if exc else ""
-        logger.warning(
-            "FCM 전송 실패 (user=%s, device=%s, code=%s, msg=%s)",
-            getattr(user, "id", None),
-            getattr(devices2[i], "id", None) if i < len(devices2) else None,
-            code,
-            exc,
-        )
-
-        try:
-            d = devices2[i]
-            d.is_active = False
-            d.save(update_fields=["is_active"])
-        except Exception:
-            logger.exception("FCM 실패 토큰 처리 중 에러 (user=%s, idx=%s)", getattr(user, "id", None), i)
-
-
+                    response = messaging.send_each_for_multicast(message)
+                    results = response.responses
+                else:
+                    results = []
+                    for device in batch:
+                        try:
+                            messaging.send(messaging.Message(token=device.fcm_token, **options))
+                            results.append((True, None))
+                        except Exception as exc:
+                            results.append((False, exc))
+                for device, result in zip(batch, results):
+                    if isinstance(result, tuple):
+                        success, exc = result
+                    else:
+                        success, exc = result.success, result.exception
+                    if not success:
+                        code = getattr(exc, "code", "")
+                        logger.warning("FCM failed (device=%s, code=%s)", device.id, code)
+                        if code in (
+                            "registration-token-not-registered",
+                            "messaging/registration-token-not-registered",
+                            "UNREGISTERED",
+                            "unregistered",
+                        ):
+                            Device.objects.filter(
+                                pk=device.pk, fcm_token=device.fcm_token
+                            ).update(is_active=False)
+            except Exception:
+                logger.exception("FCM send failed (user=%s, locale=%s)", user.id, locale)
 
 
 
@@ -741,9 +693,13 @@ def send_project_invite_notification(invite):
         "inviteToken": invite.token,
     }
 
+    event_args = {"project": invite.project.name, "actor": invite.invited_by.nickname or invite.invited_by.email}
+
     def _enqueue():
         from .tasks import push_to_user_task  # ✅ 함수 안 import
-        push_to_user_task.delay(invited_user.id, title, body, data, False)
+        push_to_user_task.delay(invited_user.id, title, body, data, False,
+                                event_key="project_invite",
+                                event_args=event_args)
 
     transaction.on_commit(_enqueue)
 
@@ -808,14 +764,21 @@ def send_project_updated_notifications(
             },
         )
 
+    event_args = {"project": project.name, "actor": editor.nickname or editor.email}
+
     def _enqueue():
         from .tasks import push_to_users_task  # ✅ 함수 안 import
-        push_to_users_task.delay(target_ids, title, body, data, False)
+        push_to_users_task.delay(target_ids, title, body, data, False,
+                                 event_key="project_destroy" if event == "destroy" else "project_updated",
+                                 event_args=event_args)
 
     transaction.on_commit(_enqueue)
 
 
-def send_todo_activity_notifications(todo: Todo, actor, event: str, changes: list[dict] | None = None):
+def send_todo_activity_notifications(
+    todo: Todo, actor, event: str, changes: list[dict] | None = None,
+    *, event_key=None, event_args=None,
+):
     """
     event: "created" | "updated"
     """
@@ -865,7 +828,13 @@ def send_todo_activity_notifications(todo: Todo, actor, event: str, changes: lis
                 },
             )
         
-        send_push_to_user(user, title, body, data, force_data_only= force_data_only) 
+        snapshot = (
+            {"event_key": event_key, "event_args": event_args}
+            if event_key else todo_push_snapshot(todo, actor, event)
+        )
+        send_push_to_user(
+            user, title, body, data, force_data_only=force_data_only, **snapshot
+        )
 
         
 
@@ -889,7 +858,9 @@ def send_todo_reminder_notification(user: User, reminder: Reminder):
         "reminderId": str(reminder.id),
     }
 
-    send_push_to_user(user, title, body, data)
+    send_push_to_user(user, title, body, data,
+                      event_key="reminder_todo" if todo.kind == TodoKind.CHECKLIST else "reminder_schedule",
+                      event_args={"project": project.name, "todo": todo.title})
 
 
 

@@ -957,6 +957,7 @@ class Device(models.Model):
         related_name="devices",
     )
     fcm_token = models.CharField(max_length=255, unique=True)
+    locale = models.CharField(max_length=10, null=True, blank=True)
     platform = models.CharField(
         max_length=20,
         choices=Platform.choices,

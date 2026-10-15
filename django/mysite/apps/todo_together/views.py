@@ -1,3 +1,4 @@
+from .push_localization import todo_push_snapshot
 from django.http import HttpResponse, JsonResponse
 from django.core.serializers.json import DjangoJSONEncoder
 
@@ -1006,7 +1007,8 @@ class TodoViewSet(viewsets.ModelViewSet):
         todo = serializer.save()
         actor_id = self.request.user.id
         todo_id = str(todo.id)
-        transaction.on_commit(lambda: todo_post_create_task.delay(todo_id, actor_id))
+        snapshot = todo_push_snapshot(todo, self.request.user, "created")
+        transaction.on_commit(lambda: todo_post_create_task.delay(todo_id, actor_id, **snapshot))
         # todo = serializer.save()
         # send_todo_activity_notifications(todo, actor=self.request.user, event="created")
         # schedule_next_reminders_for_todo(todo)
@@ -1038,16 +1040,18 @@ class TodoViewSet(viewsets.ModelViewSet):
         actor_id = self.request.user.id
         todo_id = str(todo.id)
 
+        snapshot = todo_push_snapshot(todo, self.request.user, "updated")
+
         def _enqueue():
             logger.warning("[on_commit] fired update todo=%s", todo_id)
             try:
-                r = todo_post_update_task.delay(todo_id, actor_id, "updated", changes)
+                r = todo_post_update_task.delay(todo_id, actor_id, "updated", changes, **snapshot)
                 logger.warning("[on_commit] enqueued task=%s todo=%s", r.id, todo_id)
             except Exception:
                 logger.exception("[on_commit] enqueue failed update todo=%s", todo_id)
 
         transaction.on_commit(_enqueue)
-        # transaction.on_commit(lambda: todo_post_update_task.delay(todo_id, actor_id, "updated", changes))
+        # transaction.on_commit(lambda: todo_post_update_task.delay(todo_id, actor_id, "updated", changes, **snapshot))
         # schedule_next_reminders_for_todo(todo)
 
     def _only_status(self, request):
@@ -1089,7 +1093,8 @@ class TodoViewSet(viewsets.ModelViewSet):
             instance.soft_delete()
             instance.bump_version(save=True)
 
-            transaction.on_commit(lambda: todo_post_destroy_task.delay(todo_id, actor_id))
+            snapshot = todo_push_snapshot(instance, request.user, "destroy")
+            transaction.on_commit(lambda: todo_post_destroy_task.delay(todo_id, actor_id, **snapshot))
         return Response(status=status.HTTP_204_NO_CONTENT)
     
 
@@ -1535,6 +1540,8 @@ class DeviceViewSet(viewsets.GenericViewSet):
             device.fcm_token = token
             device.platform = platform
             device.is_active = True
+            if "locale" in s.validated_data:
+                device.locale = s.validated_data["locale"]
             device.save()
         else:
             # 2) public_id가 없으면: 토큰 기준으로 upsert (기존 동작 + public_id 자동 생성)
@@ -1543,6 +1550,7 @@ class DeviceViewSet(viewsets.GenericViewSet):
                 defaults={
                     "user": user,
                     "platform": platform,
+                    "locale": s.validated_data.get("locale"),
                     "is_active": True,
                 },
             )
@@ -1551,7 +1559,9 @@ class DeviceViewSet(viewsets.GenericViewSet):
                     device.user = user
                 device.platform = platform
                 device.is_active = True
-                device.save(update_fields=["user", "platform", "is_active", "last_used_at"])
+                if "locale" in s.validated_data:
+                    device.locale = s.validated_data["locale"]
+                device.save(update_fields=["user", "platform", "locale", "is_active", "last_used_at"])
 
         return Response(
             DeviceSerializer(device).data,   # ✅ public_id 포함되어 내려감
