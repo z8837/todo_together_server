@@ -16,8 +16,11 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from mysite.core import health
 
 urlpatterns = [
+    path('health/live/', health.live, name='health-live'),
+    path('health/ready/', health.ready, name='health-ready'),
     path('admin/', admin.site.urls),
     path('firstapp/', include('mysite.apps.firstapp.urls')),
     path('toto/', include('mysite.apps.todo_together.urls')),
