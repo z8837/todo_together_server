@@ -119,6 +119,9 @@ def recent_crashes(config, pid, now):
         "--since", f"@{int(now - 65)}", "--lines=32",
         "--grep", r"Worker.*(SIGSEGV|SIGBUS|code 139|code 135)",
     ])
+    # journalctl returns 1 (with no output) when the filter matches no records.
+    if result.returncode == 1 and not result.stdout.strip() and not result.stderr.strip():
+        return 0
     if result.returncode:
         raise RuntimeError("Cannot read crash journal")
     count = 0

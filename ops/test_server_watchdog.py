@@ -144,6 +144,17 @@ class RecoverySafetyTests(unittest.TestCase):
         with patch.object(watchdog, "run_command", return_value=MagicMock(returncode=0, stdout=output)):
             self.assertEqual(watchdog.recent_crashes(watchdog.Config(), 123, 1000), 2)
 
+    def test_empty_journal_match_is_a_healthy_zero(self):
+        result = MagicMock(returncode=1, stdout="", stderr="")
+        with patch.object(watchdog, "run_command", return_value=result):
+            self.assertEqual(watchdog.recent_crashes(watchdog.Config(), 123, 1000), 0)
+
+    def test_journal_permission_failure_is_not_hidden_as_zero(self):
+        result = MagicMock(returncode=1, stdout="", stderr="Permission denied")
+        with patch.object(watchdog, "run_command", return_value=result):
+            with self.assertRaises(RuntimeError):
+                watchdog.recent_crashes(watchdog.Config(), 123, 1000)
+
 
 class HTTPProbeIntegrationTests(unittest.TestCase):
     def test_unix_socket_checks_status_and_body(self):
